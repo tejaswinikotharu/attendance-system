@@ -1,0 +1,150 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum SessionStatus {
+  SCHEDULED
+  CONDUCTED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  ATTENDED
+  ABSENT
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+model User {
+  id           String      @id @default(uuid())
+  email        String      @unique
+  passwordHash String
+  fullName     String
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  semesters    Semester[]
+
+  @@map("users")
+}
+
+model Semester {
+  id             String         @id @default(uuid())
+  userId         String
+  name           String         // e.g. "Spring 2026"
+  startDate      DateTime       @db.Date
+  endDate        DateTime       @db.Date
+  targetPercent  Int            @default(75) // 1 - 99
+  isCurrent      Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subjects       Subject[]
+  holidays       Holiday[]
+  sessions       ClassSession[]
+
+  @@index([userId])
+  @@map("semesters")
+}
+
+model Subject {
+  id             String          @id @default(uuid())
+  semesterId     String
+  name           String          // e.g. "Computer Networks"
+  code           String          // e.g. "CS501"
+  color          String          @default("#2563EB")
+  targetPercent  Int?            // Optional subject-level target override (1 - 99)
+  professor      String?
+  room           String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  semester       Semester        @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  slots          TimetableSlot[]
+  sessions       ClassSession[]
+
+  @@unique([semesterId, code])
+  @@index([semesterId])
+  @@map("subjects")
+}
+
+model TimetableSlot {
+  id         String     @id @default(uuid())
+  subjectId  String
+  dayOfWeek  DayOfWeek
+  startTime  String     // "HH:mm" 24h
+  endTime    String     // "HH:mm"
+  room       String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  subject    Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@index([subjectId])
+  @@map("timetable_slots")
+}
+
+model Holiday {
+  id         String     @id @default(uuid())
+  semesterId String
+  date       DateTime   @db.Date
+  title      String     // e.g. "Independence Day"
+  createdAt  DateTime   @default(now())
+
+  semester   Semester   @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+
+  @@unique([semesterId, date])
+  @@index([semesterId])
+  @@map("holidays")
+}
+
+model ClassSession {
+  id               String            @id @default(uuid())
+  semesterId       String
+  subjectId        String
+  date             DateTime          @db.Date
+  startTime        String            // "HH:mm"
+  endTime          String            // "HH:mm"
+  room             String?
+  status           SessionStatus     @default(SCHEDULED)
+  note             String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  semester         Semester          @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  subject          Subject           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  attendanceRecord AttendanceRecord?
+
+  // Deduplication constraint: exactly one class per subject timeslot
+  @@unique([semesterId, subjectId, date, startTime])
+  @@index([semesterId, date])
+  @@index([subjectId])
+  @@map("class_sessions")
+}
+
+model AttendanceRecord {
+  id         String           @id @default(uuid())
+  sessionId  String           @unique // Strict 1:1 relation with ClassSession
+  status     AttendanceStatus @default(ATTENDED)
+  markedAt   DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  note       String?
+
+  session    ClassSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("attendance_records")
+}
