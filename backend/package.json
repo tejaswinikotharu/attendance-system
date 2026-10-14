@@ -1,0 +1,27 @@
+{
+  "name": "attendwise-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "AttendWise Backend - Smart Attendance & Bunk Planner API",
+  "main": "dist/server.js",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "build": "tsc",
+    "start": "node dist/server.js"
+  },
+  "keywords": [
+    "attendance",
+    "planner",
+    "bunk-calculator",
+    "student-utility"
+  ],
+  "author": "AttendWise Team",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
