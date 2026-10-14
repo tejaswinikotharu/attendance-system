@@ -5,6 +5,7 @@ import authRoutes from "./routes/auth.routes.js";
 import semesterRoutes from "./routes/semester.routes.js";
 import subjectRoutes from "./routes/subject.routes.js";
 import timetableRoutes from "./routes/timetable.routes.js";
+import attendanceRoutes from "./routes/attendance.routes.js";
 
 export const app = express();
 
@@ -22,6 +23,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/semesters", semesterRoutes);
 app.use("/api/subjects", subjectRoutes);
 app.use("/api/timetable", timetableRoutes);
+app.use("/api/attendance", attendanceRoutes);
 
 // Centralized error handling
 app.use(errorHandler);
