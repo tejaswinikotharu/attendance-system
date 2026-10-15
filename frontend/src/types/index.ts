@@ -113,8 +113,86 @@ export interface AttendanceRecordItem {
   };
 }
 
+export interface HistoricalBaselineItem {
+  id: string;
+  subjectId: string;
+  subjectCode: string;
+  subjectName: string;
+  color: string;
+  present: number;
+  total: number;
+  absent: number;
+  percentage: number;
+  batchId?: string | null;
+  importedAt?: string;
+  createdAt?: string;
+  isAggregateBaseline?: boolean;
+  note?: string;
+}
+
+export interface HistoricalImportPreviewRow {
+  rowNumber: number;
+  subjectCode: string;
+  subjectName: string;
+  present: number;
+  total: number;
+  absent: number;
+  percentage: number | null;
+  errors: string[];
+  existsInSemester: boolean;
+  hasExistingBaseline: boolean;
+  willCreateSubject: boolean;
+}
+
+export interface HistoricalImportPreviewResponse {
+  isValid: boolean;
+  targetSemester: {
+    id: string;
+    name: string;
+    targetPercent: number;
+    startDate: string;
+    endDate: string;
+  };
+  summary: {
+    totalSubjects: number;
+    validSubjectsCount: number;
+    totalPresent: number;
+    totalConducted: number;
+    totalAbsent: number;
+    overallPercentage: number | null;
+  };
+  conflictCount: number;
+  globalErrors: string[];
+  rows: HistoricalImportPreviewRow[];
+}
+
+export interface HistoricalImportCommitResponse {
+  message: string;
+  batchId: string;
+  semesterId: string;
+  importedCount: number;
+  summary: {
+    totalSubjects: number;
+    totalPresent: number;
+    totalConducted: number;
+    totalAbsent: number;
+    overallPercentage: number | null;
+  };
+  subjects: Array<{
+    subjectId: string;
+    code: string;
+    name: string;
+    present: number;
+    total: number;
+    absent: number;
+    percentage: number;
+    wasCreated: boolean;
+  }>;
+}
+
 export interface AttendanceHistoryResponse {
   records: AttendanceRecordItem[];
+  historicalBaselines?: HistoricalBaselineItem[];
   pagination: {
     totalItems: number;
     totalPages: number;
@@ -154,6 +232,12 @@ export interface SubjectSummary {
   mathematicalExplanation: string;
   disclaimer: string;
   isRecoveryPossible?: boolean;
+  historicalBaseline?: {
+    present: number;
+    total: number;
+    batchId?: string | null;
+    createdAt?: string;
+  } | null;
 }
 
 export interface PlannerSubjectsResponse {

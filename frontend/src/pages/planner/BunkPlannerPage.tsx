@@ -194,6 +194,14 @@ export const BunkPlannerPage: React.FC = () => {
                           <span className="text-[11px] font-mono text-slate-400 uppercase">
                             {sub.subjectCode}
                           </span>
+                          {sub.historicalBaseline && (
+                            <span
+                              className="ml-2 text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200/80 px-1.5 py-0.5 rounded"
+                              title={`Includes Historical Baseline: ${sub.historicalBaseline.present}/${sub.historicalBaseline.total} classes attended`}
+                            >
+                              Baseline: {sub.historicalBaseline.present}/{sub.historicalBaseline.total}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <Badge variant={sub.statusBadge} size="sm">

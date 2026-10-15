@@ -100,6 +100,66 @@ describe("Authentication & Multi-Tenant Authorization Integration Tests", () => 
 
       expect(res.status).toBe(400);
       expect(res.body.error).toBe("Validation Error");
+      expect(res.body.message).toContain("Password must be at least 8 characters");
+    });
+
+    it("successfully registers a new student using 'name' field", async () => {
+      const nameUser = {
+        email: `student_name_${Date.now()}@university.edu`,
+        password: "Password123!",
+        name: "Student NameOnly",
+      };
+
+      const res = await request(app)
+        .post("/api/auth/register")
+        .send(nameUser);
+
+      expect(res.status).toBe(201);
+      expect(res.body.message).toBe("Registration successful");
+      expect(res.body.user.fullName).toBe("Student NameOnly");
+      expect(res.body.token).toBeDefined();
+
+      // Clean up
+      await prisma.user.deleteMany({ where: { email: nameUser.email } });
+    });
+
+    it("successfully registers when both 'fullName' and 'name' are provided", async () => {
+      const dualUser = {
+        email: `student_dual_${Date.now()}@university.edu`,
+        password: "Password123!",
+        fullName: "Student DualName",
+        name: "Student DualName",
+      };
+
+      const res = await request(app)
+        .post("/api/auth/register")
+        .send(dualUser);
+
+      expect(res.status).toBe(201);
+      expect(res.body.message).toBe("Registration successful");
+      expect(res.body.user.fullName).toBe("Student DualName");
+
+      // Clean up
+      await prisma.user.deleteMany({ where: { email: dualUser.email } });
+    });
+
+    it("rejects registration when name is too short (< 2 chars) with informative message", async () => {
+      const res = await request(app)
+        .post("/api/auth/register")
+        .send({
+          email: "shortname@university.edu",
+          password: "Password123!",
+          fullName: "A",
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Validation Error");
+      expect(res.body.message).toContain("Full name must be at least 2 characters");
+      expect(res.body.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ field: "fullName", message: "Full name must be at least 2 characters" }),
+        ])
+      );
     });
   });
 

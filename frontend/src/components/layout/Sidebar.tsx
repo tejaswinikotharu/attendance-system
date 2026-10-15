@@ -53,7 +53,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavClick }) => {
         >
           Active Semester
         </label>
-        {semesters.length > 0 ? (
+        {Array.isArray(semesters) && semesters.length > 0 ? (
           <select
             id="semester-select"
             value={selectedSemester?.id || ""}

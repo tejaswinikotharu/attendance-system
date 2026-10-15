@@ -28,15 +28,20 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
     setIsLoading(true);
     try {
-      const list = await api.getSemesters();
+      const res = await api.getSemesters();
+      const list = Array.isArray(res)
+        ? res
+        : Array.isArray((res as any)?.semesters)
+        ? (res as any).semesters
+        : [];
       setSemesters(list);
       // Auto-select current semester or first semester if none selected
-      if (!selectedSemesterId || !list.some((s) => s.id === selectedSemesterId)) {
-        const current = list.find((s) => s.isCurrent) || list[0] || null;
+      if (!selectedSemesterId || !list.some((s: Semester) => s.id === selectedSemesterId)) {
+        const current = list.find((s: Semester) => s.isCurrent) || list[0] || null;
         setSelectedSemesterId(current ? current.id : null);
       }
     } catch {
-      // Error handled silently or by query
+      setSemesters([]);
     } finally {
       setIsLoading(false);
     }
@@ -51,8 +56,9 @@ export const SemesterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [isAuthenticated]);
 
+  const safeSemesters = Array.isArray(semesters) ? semesters : [];
   const selectedSemester =
-    semesters.find((s) => s.id === selectedSemesterId) || null;
+    safeSemesters.find((s) => s.id === selectedSemesterId) || null;
 
   return (
     <SemesterContext.Provider

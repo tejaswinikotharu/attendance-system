@@ -8,12 +8,15 @@ export const validateRequest = (schema: ZodSchema) => {
       next();
     } catch (error) {
       if (error instanceof ZodError) {
+        const issues = error.issues.map((e) => ({
+          field: e.path.join("."),
+          message: e.message,
+        }));
+        const combinedMessage = issues.map((i) => i.message).join(", ") || "Validation Error";
         res.status(400).json({
           error: "Validation Error",
-          issues: error.issues.map((e) => ({
-            field: e.path.join("."),
-            message: e.message,
-          })),
+          message: combinedMessage,
+          issues,
         });
         return;
       }

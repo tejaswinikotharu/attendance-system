@@ -38,7 +38,10 @@ export const getSubjectSummary = async (
       id: subjectId,
       semester: { userId },
     },
-    include: { semester: true },
+    include: {
+      semester: true,
+      historicalAttendance: true,
+    },
   });
 
   if (!subject) {
@@ -60,7 +63,8 @@ export const getSubjectSummary = async (
     subject.id,
     sessions as unknown as SessionWithAttendance[],
     targetPercent,
-    referenceDate
+    referenceDate,
+    subject.historicalAttendance
   );
 
   const recommendation = generateBunkRecommendation(stats);
@@ -86,6 +90,7 @@ export const getSubjectSummary = async (
     headline: recommendation.headline,
     mathematicalExplanation: recommendation.mathematicalExplanation,
     disclaimer: recommendation.disclaimer,
+    historicalBaseline: stats.historicalBaseline ?? null,
   };
 };
 
@@ -449,8 +454,49 @@ export const getAttendanceHistory = async (
     subject: s.subject,
   }));
 
+  let historicalBaselines: any[] = [];
+  if (!query.startDate && !query.endDate) {
+    const historical = await prisma.historicalAttendance.findMany({
+      where: {
+        semester: {
+          userId,
+          ...(query.semesterId ? { id: query.semesterId } : {}),
+        },
+        ...(query.subjectId ? { subjectId: query.subjectId } : {}),
+      },
+      include: {
+        subject: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            color: true,
+          },
+        },
+      },
+      orderBy: { subject: { code: "asc" } },
+    });
+
+    historicalBaselines = historical.map((h) => ({
+      id: h.id,
+      subjectId: h.subjectId,
+      subjectName: h.subject.name,
+      subjectCode: h.subject.code,
+      color: h.subject.color,
+      present: h.present,
+      total: h.total,
+      absent: Math.max(0, h.total - h.present),
+      percentage: Math.round((h.present / h.total) * 10000) / 100,
+      batchId: h.batchId,
+      importedAt: h.createdAt.toISOString(),
+      isAggregateBaseline: true,
+      note: "Aggregate historical baseline imported prior to individual session tracking (no calendar dates)",
+    }));
+  }
+
   return {
     records,
+    historicalBaselines,
     pagination: {
       totalItems,
       totalPages,
@@ -511,6 +557,35 @@ export const exportAttendanceCsv = async (
     "Notes",
   ].join(",");
 
+  let historicalRows: string[] = [];
+  if (!query.startDate && !query.endDate) {
+    const historical = await prisma.historicalAttendance.findMany({
+      where: {
+        semester: {
+          userId,
+          ...(query.semesterId ? { id: query.semesterId } : {}),
+        },
+        ...(query.subjectId ? { subjectId: query.subjectId } : {}),
+      },
+      include: { subject: true },
+      orderBy: { subject: { code: "asc" } },
+    });
+
+    historicalRows = historical.map((h) => {
+      const pct = Math.round((h.present / h.total) * 10000) / 100;
+      return [
+        escapeCsvValue("[AGGREGATE BASELINE]"),
+        escapeCsvValue(h.subject.code),
+        escapeCsvValue(h.subject.name),
+        escapeCsvValue("—"),
+        escapeCsvValue("—"),
+        escapeCsvValue("CONDUCTED"),
+        escapeCsvValue(`${h.present}/${h.total} ATTENDED (${pct}%)`),
+        escapeCsvValue(`Imported historical aggregate baseline (undated past total, batch: ${h.batchId || "manual"})`),
+      ].join(",");
+    });
+  }
+
   const rows = sessions.map((s) => {
     const attendanceStatus = s.status === "CANCELLED"
       ? "CANCELLED"
@@ -530,5 +605,5 @@ export const exportAttendanceCsv = async (
     ].join(",");
   });
 
-  return [header, ...rows].join("\n");
+  return [header, ...historicalRows, ...rows].join("\n");
 };

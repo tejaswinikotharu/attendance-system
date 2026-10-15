@@ -4,6 +4,7 @@ import { render, screen } from "@testing-library/react";
 import { BrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DashboardPage } from "../pages/dashboard/DashboardPage";
+import { ToastProvider } from "../components/ui/Toast";
 import { api } from "../api/client";
 import * as SemesterContextModule from "../context/SemesterContext";
 
@@ -27,13 +28,19 @@ vi.mock("../api/client", async () => {
   };
 });
 
+/**
+ * renderWithProviders wraps with ToastProvider so that HistoricalImportModal
+ * (rendered inside DashboardPage) can call useToast() without throwing.
+ */
 const renderWithProviders = (ui: React.ReactElement) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>{ui}</BrowserRouter>
+      <ToastProvider>
+        <BrowserRouter>{ui}</BrowserRouter>
+      </ToastProvider>
     </QueryClientProvider>
   );
 };
@@ -212,5 +219,94 @@ describe("Dashboard Page", () => {
     expect(screen.getByText("(18/20 classes attended)")).toBeInTheDocument();
     expect(screen.getByText("On Track")).toBeInTheDocument();
     expect(screen.getByText("Safe to skip next 4 classes")).toBeInTheDocument();
+  });
+
+  it("displays loading spinner while semester information is loading", () => {
+    vi.spyOn(SemesterContextModule, "useSemester").mockReturnValue({
+      semesters: [],
+      selectedSemesterId: null,
+      selectedSemester: null,
+      isLoading: true,
+      setSelectedSemesterId: vi.fn(),
+      refreshSemesters: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardPage />);
+    expect(screen.getByText("Loading semester information...")).toBeInTheDocument();
+  });
+
+  it("safely handles malformed planner data without crashing", async () => {
+    vi.spyOn(SemesterContextModule, "useSemester").mockReturnValue({
+      semesters: [],
+      selectedSemesterId: "sem-1",
+      selectedSemester: {
+        id: "sem-1",
+        name: "Spring 2026",
+        startDate: "2026-01-10",
+        endDate: "2026-05-15",
+        targetPercent: 75,
+        isCurrent: true,
+      },
+      isLoading: false,
+      setSelectedSemesterId: vi.fn(),
+      refreshSemesters: vi.fn(),
+    });
+
+    (api.getPlannerSubjects as any).mockResolvedValue(null);
+    (api.getDailyAttendance as any).mockResolvedValue(null);
+
+    renderWithProviders(<DashboardPage />);
+    expect(await screen.findByText("0 classes evaluated")).toBeInTheDocument();
+    expect(await screen.findByText("No classes scheduled today")).toBeInTheDocument();
+  });
+
+  it("displays informative error banner and retry button when planner subjects query fails", async () => {
+    vi.spyOn(SemesterContextModule, "useSemester").mockReturnValue({
+      semesters: [],
+      selectedSemesterId: "sem-1",
+      selectedSemester: {
+        id: "sem-1",
+        name: "Spring 2026",
+        startDate: "2026-01-10",
+        endDate: "2026-05-15",
+        targetPercent: 75,
+        isCurrent: true,
+      },
+      isLoading: false,
+      setSelectedSemesterId: vi.fn(),
+      refreshSemesters: vi.fn(),
+    });
+
+    (api.getPlannerSubjects as any).mockRejectedValue(new Error("Database connection lost"));
+    (api.getDailyAttendance as any).mockResolvedValue({ sessions: [] });
+
+    renderWithProviders(<DashboardPage />);
+    expect(await screen.findByText("Failed to load attendance metrics")).toBeInTheDocument();
+    expect(screen.getAllByText("Database connection lost")[0]).toBeInTheDocument();
+    expect(screen.getByText("Unable to load subject attendance overview")).toBeInTheDocument();
+  });
+
+  it("displays useful error state when today's classes query fails", async () => {
+    vi.spyOn(SemesterContextModule, "useSemester").mockReturnValue({
+      semesters: [],
+      selectedSemesterId: "sem-1",
+      selectedSemester: {
+        id: "sem-1",
+        name: "Spring 2026",
+        startDate: "2026-01-10",
+        endDate: "2026-05-15",
+        targetPercent: 75,
+        isCurrent: true,
+      },
+      isLoading: false,
+      setSelectedSemesterId: vi.fn(),
+      refreshSemesters: vi.fn(),
+    });
+
+    (api.getPlannerSubjects as any).mockResolvedValue({ subjects: [] });
+    (api.getDailyAttendance as any).mockRejectedValue(new Error("Failed to load schedule"));
+
+    renderWithProviders(<DashboardPage />);
+    expect(await screen.findByText("Failed to load today's classes")).toBeInTheDocument();
   });
 });

@@ -19,6 +19,8 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { useToast } from "../../components/ui/Toast";
 import { DailySession } from "../../types";
+import { HistoricalImportModal } from "../../components/attendance/HistoricalImportModal";
+import { FileSpreadsheet } from "lucide-react";
 
 export const DailyAttendancePage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -29,6 +31,7 @@ export const DailyAttendancePage: React.FC = () => {
   const todayStr = new Date().toISOString().slice(0, 10);
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [isHistoricalModalOpen, setIsHistoricalModalOpen] = useState<boolean>(false);
 
   const {
     data: dailyData,
@@ -143,6 +146,18 @@ export const DailyAttendancePage: React.FC = () => {
               className={`w-4 h-4 ${isRefetching ? "animate-spin text-indigo-600" : ""}`}
             />
           </button>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setIsHistoricalModalOpen(true)}
+            disabled={!selectedSemesterId}
+            className="bg-indigo-50/50 text-indigo-700 border-indigo-200 hover:bg-indigo-100/60 ml-1"
+            title="Import past attendance totals"
+          >
+            <FileSpreadsheet className="w-4 h-4 mr-1.5" />
+            Import Existing Attendance
+          </Button>
         </div>
       </div>
 
@@ -346,6 +361,20 @@ export const DailyAttendancePage: React.FC = () => {
           <span className="font-semibold text-slate-700">PENDING</span> and do not count toward conducted statistics until explicitly marked. You can correct any recorded response anytime. Cancelled classes are excluded from conducted totals.
         </p>
       </div>
+
+      {/* Historical Attendance Import Modal */}
+      {selectedSemesterId && (
+        <HistoricalImportModal
+          isOpen={isHistoricalModalOpen}
+          onClose={() => setIsHistoricalModalOpen(false)}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ["dailyAttendance"] });
+            queryClient.invalidateQueries({ queryKey: ["plannerSubjects"] });
+            queryClient.invalidateQueries({ queryKey: ["attendanceHistory"] });
+          }}
+          semesterId={selectedSemesterId}
+        />
+      )}
     </div>
   );
 };

@@ -22,6 +22,7 @@ import { SemesterModal } from "./SemesterModal";
 import { SubjectModal } from "./SubjectModal";
 import { SlotModal } from "./SlotModal";
 import { CsvImportModal } from "./CsvImportModal";
+import { HistoricalImportModal } from "../../components/attendance/HistoricalImportModal";
 
 const DAYS_OF_WEEK: DayOfWeek[] = [
   "MONDAY",
@@ -47,6 +48,7 @@ export const TimetablePage: React.FC = () => {
   const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(false);
   const [isSlotModalOpen, setIsSlotModalOpen] = useState(false);
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
+  const [isHistoricalModalOpen, setIsHistoricalModalOpen] = useState(false);
 
   // Edit / Delete tracking
   const [subjectToEdit, setSubjectToEdit] = useState<Subject | null>(null);
@@ -138,11 +140,23 @@ export const TimetablePage: React.FC = () => {
           <Button
             size="sm"
             variant="outline"
+            onClick={() => setIsHistoricalModalOpen(true)}
+            disabled={!selectedSemesterId}
+            className="bg-indigo-50/50 text-indigo-700 border-indigo-200 hover:bg-indigo-100/60"
+            title="Import subject-wise attendance totals to set up immediate dashboard baseline"
+          >
+            <FileSpreadsheet className="w-4 h-4 mr-1.5" />
+            Import Existing Attendance
+          </Button>
+
+          <Button
+            size="sm"
+            variant="outline"
             onClick={() => setIsCsvModalOpen(true)}
             disabled={!selectedSemesterId}
           >
             <FileSpreadsheet className="w-4 h-4 mr-1.5" />
-            Import CSV
+            Import CSV Timetable
           </Button>
 
           <Button
@@ -498,6 +512,14 @@ export const TimetablePage: React.FC = () => {
             onClose={() => setIsCsvModalOpen(false)}
             onSuccess={invalidateAll}
             semesterId={selectedSemesterId}
+          />
+
+          <HistoricalImportModal
+            isOpen={isHistoricalModalOpen}
+            onClose={() => setIsHistoricalModalOpen(false)}
+            onSuccess={invalidateAll}
+            semesterId={selectedSemesterId}
+            semesterName={selectedSemester?.name}
           />
         </>
       )}

@@ -29,6 +29,12 @@ export interface SubjectAttendanceStats {
   remainingSessions: number; // Confirmed future scheduled sessions
   currentPercentage: number | null; // null if conductedSessions === 0
   statusBadge: AttendanceBadge;
+  historicalBaseline?: {
+    present: number;
+    total: number;
+    batchId?: string | null;
+    createdAt?: Date | string;
+  } | null;
 }
 
 export type BunkRecommendationCode =

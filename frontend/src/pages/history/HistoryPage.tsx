@@ -9,6 +9,8 @@ import {
   MapPin,
   Calendar,
   AlertCircle,
+  FileSpreadsheet,
+  Info,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { useSemester } from "../../context/SemesterContext";
@@ -16,10 +18,14 @@ import { Card } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { useToast } from "../../components/ui/Toast";
+import { HistoricalImportModal } from "../../components/attendance/HistoricalImportModal";
 
 export const HistoryPage: React.FC = () => {
   const toast = useToast();
-  const { selectedSemesterId } = useSemester();
+  const { selectedSemesterId, selectedSemester } = useSemester();
+
+  // Modals
+  const [isHistoricalModalOpen, setIsHistoricalModalOpen] = useState<boolean>(false);
 
   // Filters state
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
@@ -41,6 +47,7 @@ export const HistoryPage: React.FC = () => {
     data: historyData,
     isLoading,
     error,
+    refetch: refetchHistory,
   } = useQuery({
     queryKey: [
       "attendanceHistory",
@@ -92,6 +99,7 @@ export const HistoryPage: React.FC = () => {
   };
 
   const records = historyData?.records || [];
+  const historicalBaselines = historyData?.historicalBaselines || [];
   const pagination = historyData?.pagination;
 
   return (
@@ -107,17 +115,105 @@ export const HistoryPage: React.FC = () => {
           </p>
         </div>
 
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={handleExportCsv}
-          isLoading={isExporting}
-          disabled={!selectedSemesterId || records.length === 0}
-        >
-          <Download className="w-4 h-4 mr-1.5" />
-          Export to CSV
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setIsHistoricalModalOpen(true)}
+            disabled={!selectedSemesterId}
+            className="bg-indigo-50/50 text-indigo-700 border-indigo-200 hover:bg-indigo-100/60"
+          >
+            <FileSpreadsheet className="w-4 h-4 mr-1.5" />
+            Import Existing Attendance
+          </Button>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleExportCsv}
+            isLoading={isExporting}
+            disabled={!selectedSemesterId || (records.length === 0 && historicalBaselines.length === 0)}
+          >
+            <Download className="w-4 h-4 mr-1.5" />
+            Export to CSV
+          </Button>
+        </div>
       </div>
+
+      {/* Historical Baselines Section (if any baselines exist for this semester) */}
+      {historicalBaselines.length > 0 && !startDate && !endDate && (
+        <Card
+          title={`Imported Historical Baselines (${historicalBaselines.length})`}
+          subtitle="Subject aggregate totals imported prior to individual session tracking"
+        >
+          <div className="mb-3 p-3 bg-indigo-50/60 border border-indigo-100 rounded-xl text-xs text-indigo-900 flex items-start gap-2.5">
+            <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+            <p className="text-[11px] text-indigo-700 leading-relaxed">
+              These counts represent aggregate subject attendance totals established before individual session
+              tracking began. Because aggregate imports do not supply individual class dates, they are
+              maintained as verified subject baselines and seamlessly integrated with your session calculations.
+            </p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50/70 border-b border-slate-100 text-slate-500 font-semibold uppercase tracking-wider">
+                <tr>
+                  <th className="py-2.5 px-4">Subject</th>
+                  <th className="py-2.5 px-4 text-center">Attended</th>
+                  <th className="py-2.5 px-4 text-center">Conducted</th>
+                  <th className="py-2.5 px-4 text-center">Absent</th>
+                  <th className="py-2.5 px-4 text-center">Percentage</th>
+                  <th className="py-2.5 px-4">Record Type</th>
+                  <th className="py-2.5 px-4">Imported At</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {historicalBaselines.map((h) => (
+                  <tr key={h.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="py-2.5 px-4">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: h.color }}
+                        />
+                        <div>
+                          <p className="font-semibold text-slate-900 leading-tight">
+                            {h.subjectName}
+                          </p>
+                          <span className="text-[10px] font-mono text-slate-400 uppercase">
+                            {h.subjectCode}
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-4 text-center font-mono font-medium text-emerald-600">
+                      {h.present}
+                    </td>
+                    <td className="py-2.5 px-4 text-center font-mono font-medium text-slate-800">
+                      {h.total}
+                    </td>
+                    <td className="py-2.5 px-4 text-center font-mono text-slate-500">
+                      {h.absent}
+                    </td>
+                    <td className="py-2.5 px-4 text-center font-mono font-bold text-indigo-600">
+                      {h.percentage.toFixed(1)}%
+                    </td>
+                    <td className="py-2.5 px-4">
+                      <span className="inline-block text-[10px] bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full font-semibold">
+                        AGGREGATE BASELINE
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-4 text-slate-400 text-[11px] font-mono">
+                      {h.importedAt ? new Date(h.importedAt).toLocaleDateString() : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       {/* Filter Toolbar Card */}
       <Card>
@@ -368,6 +464,19 @@ export const HistoryPage: React.FC = () => {
           </div>
         )}
       </Card>
+
+      {/* Historical Attendance Import Modal */}
+      {selectedSemesterId && (
+        <HistoricalImportModal
+          isOpen={isHistoricalModalOpen}
+          onClose={() => setIsHistoricalModalOpen(false)}
+          onSuccess={() => {
+            refetchHistory();
+          }}
+          semesterId={selectedSemesterId}
+          semesterName={selectedSemester?.name}
+        />
+      )}
     </div>
   );
 };

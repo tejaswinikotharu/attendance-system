@@ -81,6 +81,7 @@ export const getUserSubjects = async (
     },
     orderBy: { name: "asc" },
     include: {
+      historicalAttendance: true,
       slots: {
         orderBy: [
           { dayOfWeek: "asc" },
@@ -102,6 +103,7 @@ export const getSubjectById = async (userId: string, subjectId: string) => {
   return await prisma.subject.findUnique({
     where: { id: subject.id },
     include: {
+      historicalAttendance: true,
       slots: {
         orderBy: [
           { dayOfWeek: "asc" },

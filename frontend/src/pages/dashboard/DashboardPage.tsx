@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -6,6 +6,8 @@ import {
   CheckSquare,
   Calculator,
   AlertTriangle,
+  AlertCircle,
+  RotateCcw,
   CheckCircle2,
   Clock,
   ArrowRight,
@@ -19,15 +21,19 @@ import { Badge } from "../../components/ui/Badge";
 import { ProgressBar } from "../../components/ui/ProgressBar";
 import { Button } from "../../components/ui/Button";
 import { AttendanceBarChart } from "../../components/charts/AttendanceBarChart";
+import { HistoricalImportModal } from "../../components/attendance/HistoricalImportModal";
+import { FileSpreadsheet } from "lucide-react";
 
 export const DashboardPage: React.FC = () => {
-  const { selectedSemester, selectedSemesterId } = useSemester();
+  const { selectedSemester, selectedSemesterId, isLoading: isSemesterLoading } = useSemester();
+  const [isHistoricalModalOpen, setIsHistoricalModalOpen] = useState(false);
 
   // 1. Fetch live subject planner & attendance metrics
   const {
     data: plannerData,
     isLoading: isPlannerLoading,
     error: plannerError,
+    refetch: refetchPlanner,
   } = useQuery({
     queryKey: ["plannerSubjects", selectedSemesterId],
     queryFn: () => api.getPlannerSubjects(selectedSemesterId || undefined),
@@ -38,11 +44,22 @@ export const DashboardPage: React.FC = () => {
   const {
     data: todayData,
     isLoading: isTodayLoading,
+    error: todayError,
+    refetch: refetchToday,
   } = useQuery({
     queryKey: ["dailyAttendance", "today", selectedSemesterId],
     queryFn: () => api.getDailyAttendance(undefined, selectedSemesterId || undefined),
     enabled: !!selectedSemesterId,
   });
+
+  if (isSemesterLoading && !selectedSemester) {
+    return (
+      <div className="py-20 flex flex-col items-center justify-center text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-3" />
+        <p className="text-xs text-slate-500 font-medium">Loading semester information...</p>
+      </div>
+    );
+  }
 
   if (!selectedSemester) {
     return (
@@ -64,11 +81,11 @@ export const DashboardPage: React.FC = () => {
     );
   }
 
-  const subjects = plannerData?.subjects || [];
+  const subjects = Array.isArray(plannerData?.subjects) ? plannerData.subjects : [];
 
   // Calculate overall semester aggregate attendance
-  const totalConducted = subjects.reduce((acc, s) => acc + s.conductedSessions, 0);
-  const totalAttended = subjects.reduce((acc, s) => acc + s.attendedSessions, 0);
+  const totalConducted = subjects.reduce((acc, s) => acc + (s.conductedSessions || 0), 0);
+  const totalAttended = subjects.reduce((acc, s) => acc + (s.attendedSessions || 0), 0);
   const overallPercentage =
     totalConducted > 0
       ? Math.round((totalAttended / totalConducted) * 10000) / 100
@@ -80,7 +97,7 @@ export const DashboardPage: React.FC = () => {
 
   // Identify subjects at risk or below target
   const atRiskSubjects = subjects.filter(
-    (s) => s.conductedSessions > 0 && !s.isMeetingTarget
+    (s) => (s.conductedSessions || 0) > 0 && !s.isMeetingTarget
   );
 
   return (
@@ -102,6 +119,16 @@ export const DashboardPage: React.FC = () => {
 
         {/* Quick Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setIsHistoricalModalOpen(true)}
+            className="bg-indigo-50/50 text-indigo-700 border-indigo-200 hover:bg-indigo-100/60"
+            title="Import existing attendance totals"
+          >
+            <FileSpreadsheet className="w-4 h-4 mr-1.5" />
+            Import Existing Attendance
+          </Button>
           <Link to="/attendance">
             <Button size="sm" variant="outline">
               <CheckSquare className="w-4 h-4 mr-1.5" />
@@ -172,7 +199,7 @@ export const DashboardPage: React.FC = () => {
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-extrabold text-slate-900">
-              {subjects.reduce((acc, s) => acc + s.safeBunks, 0)}
+              {subjects.reduce((acc, s) => acc + (s.safeBunks || 0), 0)}
             </span>
             <span className="text-xs text-slate-500">total safe bunks available</span>
           </div>
@@ -215,8 +242,32 @@ export const DashboardPage: React.FC = () => {
         </Card>
       </div>
 
+      {/* Error Alert if planner metrics failed to load */}
+      {plannerError && (
+        <div
+          role="alert"
+          className="p-4 rounded-xl bg-rose-50 border border-rose-200/80 flex items-center justify-between gap-4"
+        >
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+            <div>
+              <h3 className="text-sm font-semibold text-rose-900">
+                Failed to load attendance metrics
+              </h3>
+              <p className="text-xs text-rose-700 mt-0.5">
+                {(plannerError as any)?.message || "A network or server error occurred while retrieving attendance data."}
+              </p>
+            </div>
+          </div>
+          <Button size="sm" variant="outline" className="bg-white shrink-0" onClick={() => refetchPlanner()}>
+            <RotateCcw className="w-3.5 h-3.5 mr-1" />
+            Retry
+          </Button>
+        </div>
+      )}
+
       {/* Warning Alert if any subjects are in deficit */}
-      {atRiskSubjects.length > 0 && (
+      {!plannerError && atRiskSubjects.length > 0 && (
         <div
           role="alert"
           className="p-4 rounded-xl bg-amber-50 border border-amber-200/80 flex items-start justify-between gap-4"
@@ -254,7 +305,13 @@ export const DashboardPage: React.FC = () => {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
               </div>
             ) : plannerError ? (
-              <p className="text-xs text-rose-600">Failed to load chart data</p>
+              <div className="h-64 flex flex-col items-center justify-center text-center p-6 bg-slate-50 rounded-xl border border-dashed border-rose-200">
+                <p className="text-xs text-rose-600 font-medium">Failed to load chart metrics</p>
+                <Button size="sm" variant="outline" className="mt-2 text-xs" onClick={() => refetchPlanner()}>
+                  <RotateCcw className="w-3 h-3 mr-1" />
+                  Retry
+                </Button>
+              </div>
             ) : (
               <AttendanceBarChart
                 subjects={subjects}
@@ -282,7 +339,15 @@ export const DashboardPage: React.FC = () => {
               <div className="py-8 text-center">
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600 mx-auto" />
               </div>
-            ) : !todayData || todayData.sessions.length === 0 ? (
+            ) : todayError ? (
+              <div className="py-8 text-center text-slate-500">
+                <p className="text-xs text-rose-600 font-medium">Failed to load today&apos;s classes</p>
+                <Button size="sm" variant="outline" className="mt-2 text-xs" onClick={() => refetchToday()}>
+                  <RotateCcw className="w-3 h-3 mr-1" />
+                  Retry
+                </Button>
+              </div>
+            ) : !Array.isArray(todayData?.sessions) || todayData.sessions.length === 0 ? (
               <div className="py-8 text-center text-slate-400">
                 <p className="text-xs font-medium">No classes scheduled today</p>
               </div>
@@ -343,6 +408,22 @@ export const DashboardPage: React.FC = () => {
               />
             ))}
           </div>
+        ) : plannerError ? (
+          <div className="p-8 text-center bg-white rounded-xl border border-rose-200">
+            <div className="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-2">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <p className="text-sm font-semibold text-rose-900">
+              Unable to load subject attendance overview
+            </p>
+            <p className="text-xs text-slate-500 mt-1 mb-4">
+              {(plannerError as any)?.message || "Please check your network connection and try again."}
+            </p>
+            <Button size="sm" variant="outline" onClick={() => refetchPlanner()}>
+              <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+              Retry
+            </Button>
+          </div>
         ) : subjects.length === 0 ? (
           <div className="p-8 text-center bg-white rounded-xl border border-slate-200">
             <p className="text-sm font-medium text-slate-600">
@@ -375,6 +456,14 @@ export const DashboardPage: React.FC = () => {
                           <span className="text-[11px] font-mono text-slate-400 uppercase">
                             {sub.subjectCode}
                           </span>
+                          {sub.historicalBaseline && (
+                            <span
+                              className="ml-2 text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200/80 px-1.5 py-0.5 rounded"
+                              title={`Imported Historical Baseline: ${sub.historicalBaseline.present}/${sub.historicalBaseline.total} classes attended`}
+                            >
+                              Baseline: {sub.historicalBaseline.present}/{sub.historicalBaseline.total}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <Badge variant={sub.statusBadge} size="sm">
@@ -436,6 +525,20 @@ export const DashboardPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Historical Attendance Import Modal */}
+      {selectedSemesterId && (
+        <HistoricalImportModal
+          isOpen={isHistoricalModalOpen}
+          onClose={() => setIsHistoricalModalOpen(false)}
+          onSuccess={() => {
+            refetchPlanner();
+            refetchToday();
+          }}
+          semesterId={selectedSemesterId}
+          semesterName={selectedSemester?.name}
+        />
+      )}
     </div>
   );
 };

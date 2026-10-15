@@ -53,7 +53,13 @@ export function calculateSubjectAttendance(
   subjectId: string,
   sessions: SessionWithAttendance[],
   rawTargetPercent: number,
-  referenceDate: Date = new Date()
+  referenceDate: Date = new Date(),
+  historicalBaseline?: {
+    present: number;
+    total: number;
+    batchId?: string | null;
+    createdAt?: Date | string;
+  } | null
 ): SubjectAttendanceStats {
   const targetPercent = validateTargetPercent(rawTargetPercent);
   const refTime = normalizeDateToMidnight(referenceDate);
@@ -93,28 +99,35 @@ export function calculateSubjectAttendance(
     }
   }
 
-  // Conducted is strictly evaluated classes with confirmed attendance response
-  const conductedSessions = attendedSessions + absentSessions;
+  // Integrate historical baseline if provided
+  const histPresent = historicalBaseline ? Math.max(0, historicalBaseline.present) : 0;
+  const histTotal = historicalBaseline ? Math.max(0, historicalBaseline.total) : 0;
+  const histAbsent = Math.max(0, histTotal - histPresent);
+
+  // Conducted is strictly evaluated classes with confirmed attendance response + historical conducted
+  const totalAttended = attendedSessions + histPresent;
+  const totalAbsent = absentSessions + histAbsent;
+  const conductedSessions = totalAttended + totalAbsent;
 
   // Safe percentage calculation: null when 0 conducted classes
   let currentPercentage: number | null = null;
   if (conductedSessions > 0) {
     // Preserve two decimal places cleanly
     currentPercentage =
-      Math.round((attendedSessions / conductedSessions) * 10000) / 100;
+      Math.round((totalAttended / conductedSessions) * 10000) / 100;
   }
 
   // Determine visual status badge
   let statusBadge: AttendanceBadge = "NO_DATA";
   if (conductedSessions > 0 && currentPercentage !== null) {
     // Exact integer comparison: (A * 100) >= (T * C)
-    const meetsTarget = attendedSessions * 100 >= targetPercent * conductedSessions;
+    const meetsTarget = totalAttended * 100 >= targetPercent * conductedSessions;
     if (meetsTarget) {
       statusBadge = "SAFE";
     } else {
       // Deficit evaluation: warning if deficit can be recovered in <= 2 classes
       const deficitClasses = Math.ceil(
-        (targetPercent * conductedSessions - 100 * attendedSessions) /
+        (targetPercent * conductedSessions - 100 * totalAttended) /
           (100 - targetPercent)
       );
       statusBadge = deficitClasses <= 2 ? "WARNING" : "CRITICAL";
@@ -124,14 +137,22 @@ export function calculateSubjectAttendance(
   return {
     subjectId,
     targetPercent,
-    totalSessions: sessions.length,
+    totalSessions: sessions.length + histTotal,
     conductedSessions,
-    attendedSessions,
-    absentSessions,
+    attendedSessions: totalAttended,
+    absentSessions: totalAbsent,
     pendingSessions,
     cancelledSessions,
     remainingSessions,
     currentPercentage,
     statusBadge,
+    historicalBaseline: historicalBaseline
+      ? {
+          present: histPresent,
+          total: histTotal,
+          batchId: historicalBaseline.batchId ?? null,
+          createdAt: historicalBaseline.createdAt,
+        }
+      : null,
   };
 }

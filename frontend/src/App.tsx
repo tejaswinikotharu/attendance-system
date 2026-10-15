@@ -14,6 +14,8 @@ import { DailyAttendancePage } from "./pages/attendance/DailyAttendancePage";
 import { HistoryPage } from "./pages/history/HistoryPage";
 import { BunkPlannerPage } from "./pages/planner/BunkPlannerPage";
 
+import { ErrorBoundary } from "./components/layout/ErrorBoundary";
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -26,40 +28,44 @@ const queryClient = new QueryClient({
 
 export const App: React.FC = () => {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ToastProvider>
-        <AuthProvider>
-          <SemesterProvider>
-            <BrowserRouter>
-              <Routes>
-                {/* Public Auth Routes */}
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/register" element={<RegisterPage />} />
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ToastProvider>
+          <AuthProvider>
+            <SemesterProvider>
+              <BrowserRouter>
+                <Routes>
+                  {/* Public Auth Routes */}
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/register" element={<RegisterPage />} />
 
-                {/* Authenticated Dashboard & Feature Routes */}
-                <Route
-                  path="/"
-                  element={
-                    <ProtectedRoute>
-                      <AppLayout />
-                    </ProtectedRoute>
-                  }
-                >
-                  <Route index element={<DashboardPage />} />
-                  <Route path="timetable" element={<TimetablePage />} />
-                  <Route path="attendance" element={<DailyAttendancePage />} />
-                  <Route path="history" element={<HistoryPage />} />
-                  <Route path="planner" element={<BunkPlannerPage />} />
-                </Route>
+                  {/* Authenticated Dashboard & Feature Routes */}
+                  <Route
+                    path="/"
+                    element={
+                      <ProtectedRoute>
+                        <ErrorBoundary fallbackTitle="An error occurred in this view">
+                          <AppLayout />
+                        </ErrorBoundary>
+                      </ProtectedRoute>
+                    }
+                  >
+                    <Route index element={<DashboardPage />} />
+                    <Route path="timetable" element={<TimetablePage />} />
+                    <Route path="attendance" element={<DailyAttendancePage />} />
+                    <Route path="history" element={<HistoryPage />} />
+                    <Route path="planner" element={<BunkPlannerPage />} />
+                  </Route>
 
-                {/* Fallback route */}
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </BrowserRouter>
-          </SemesterProvider>
-        </AuthProvider>
-      </ToastProvider>
-    </QueryClientProvider>
+                  {/* Fallback route */}
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </BrowserRouter>
+            </SemesterProvider>
+          </AuthProvider>
+        </ToastProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 };
 

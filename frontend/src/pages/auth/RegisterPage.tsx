@@ -41,6 +41,7 @@ export const RegisterPage: React.FC = () => {
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -59,6 +60,17 @@ export const RegisterPage: React.FC = () => {
       toast.success("Account created successfully!", "Welcome to AttendWise");
       navigate("/", { replace: true });
     } catch (err: any) {
+      if (err.details && Array.isArray(err.details)) {
+        err.details.forEach((issue: any) => {
+          if (issue.field === "fullName" || issue.field === "name") {
+            setError("fullName", { type: "server", message: issue.message });
+          } else if (issue.field === "email") {
+            setError("email", { type: "server", message: issue.message });
+          } else if (issue.field === "password") {
+            setError("password", { type: "server", message: issue.message });
+          }
+        });
+      }
       setFormError(err.message || "Failed to register account");
     }
   };

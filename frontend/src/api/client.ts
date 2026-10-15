@@ -3,6 +3,9 @@ import {
   AuthResponse,
   DailyAttendanceResponse,
   ForecastResponse,
+  HistoricalBaselineItem,
+  HistoricalImportCommitResponse,
+  HistoricalImportPreviewResponse,
   PlannerSubjectsResponse,
   RecoveryPlanResponse,
   Semester,
@@ -93,12 +96,26 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   }
 
   if (!response.ok) {
-    const message =
-      data?.error?.message ||
-      data?.message ||
-      data?.errors?.[0]?.message ||
-      `HTTP request failed with status ${response.status}`;
-    throw new ApiError(message, response.status, data?.errors || data?.details);
+    let message = "";
+    if (Array.isArray(data?.issues) && data.issues.length > 0) {
+      message = data.issues.map((i: any) => i.message || `${i.field} is invalid`).join(", ");
+    } else if (Array.isArray(data?.errors) && data.errors.length > 0) {
+      message = data.errors.map((e: any) => e.message || (typeof e === "string" ? e : `${e.field} is invalid`)).join(", ");
+    } else if (data?.message && data.message !== "Validation Error") {
+      message = data.message;
+    } else if (data?.error?.message) {
+      message = data.error.message;
+    } else if (typeof data?.error === "string" && data.error !== "Validation Error") {
+      message = data.error;
+    } else if (data?.message) {
+      message = data.message;
+    } else if (typeof data?.error === "string") {
+      message = data.error;
+    } else {
+      message = `HTTP request failed with status ${response.status}`;
+    }
+    const details = data?.issues || data?.errors || data?.details;
+    throw new ApiError(message, response.status, details);
   }
 
   return data as T;
@@ -106,10 +123,15 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
 export const api = {
   // Auth
-  register: (payload: { email: string; password: string; fullName: string }) =>
+  register: (payload: { email: string; password: string; fullName: string; name?: string }) =>
     request<AuthResponse>("/auth/register", {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        email: payload.email,
+        password: payload.password,
+        fullName: payload.fullName,
+        name: payload.name || payload.fullName,
+      }),
     }),
 
   login: (payload: { email: string; password: string }) =>
@@ -121,20 +143,32 @@ export const api = {
   getMe: () => request<{ user: User }>("/auth/me"),
 
   // Semesters
-  getSemesters: () => request<Semester[]>("/semesters"),
-  getCurrentSemester: () => request<Semester | null>("/semesters/current"),
-  createSemester: (payload: {
+  getSemesters: async (): Promise<Semester[]> => {
+    const res = await request<{ semesters: Semester[] } | Semester[]>("/semesters");
+    if (Array.isArray(res)) return res;
+    if (res && Array.isArray((res as any).semesters)) return (res as any).semesters;
+    return [];
+  },
+  getCurrentSemester: async (): Promise<Semester | null> => {
+    const res = await request<{ semester: Semester | null } | Semester | null>("/semesters/current");
+    if (res && "semester" in res) return (res as any).semester;
+    return res as Semester | null;
+  },
+  createSemester: async (payload: {
     name: string;
     startDate: string;
     endDate: string;
     targetPercent?: number;
     isCurrent?: boolean;
-  }) =>
-    request<Semester>("/semesters", {
+  }): Promise<Semester> => {
+    const res = await request<{ semester: Semester; message?: string } | Semester>("/semesters", {
       method: "POST",
       body: JSON.stringify(payload),
-    }),
-  updateSemester: (
+    });
+    if (res && "semester" in res) return (res as any).semester;
+    return res as Semester;
+  },
+  updateSemester: async (
     id: string,
     payload: Partial<{
       name: string;
@@ -143,22 +177,28 @@ export const api = {
       targetPercent: number;
       isCurrent: boolean;
     }>
-  ) =>
-    request<Semester>(`/semesters/${id}`, {
+  ): Promise<Semester> => {
+    const res = await request<{ semester: Semester; message?: string } | Semester>(`/semesters/${id}`, {
       method: "PUT",
       body: JSON.stringify(payload),
-    }),
+    });
+    if (res && "semester" in res) return (res as any).semester;
+    return res as Semester;
+  },
   deleteSemester: (id: string) =>
     request<{ message: string }>(`/semesters/${id}`, {
       method: "DELETE",
     }),
 
   // Subjects
-  getSubjects: (semesterId?: string) => {
+  getSubjects: async (semesterId?: string): Promise<Subject[]> => {
     const q = semesterId ? `?semesterId=${encodeURIComponent(semesterId)}` : "";
-    return request<Subject[]>(`/subjects${q}`);
+    const res = await request<{ subjects: Subject[] } | Subject[]>(`/subjects${q}`);
+    if (Array.isArray(res)) return res;
+    if (res && Array.isArray((res as any).subjects)) return (res as any).subjects;
+    return [];
   },
-  createSubject: (payload: {
+  createSubject: async (payload: {
     name: string;
     code: string;
     color?: string;
@@ -166,12 +206,15 @@ export const api = {
     professor?: string | null;
     room?: string | null;
     semesterId?: string;
-  }) =>
-    request<Subject>("/subjects", {
+  }): Promise<Subject> => {
+    const res = await request<{ subject: Subject; message?: string } | Subject>("/subjects", {
       method: "POST",
       body: JSON.stringify(payload),
-    }),
-  updateSubject: (
+    });
+    if (res && "subject" in res) return (res as any).subject;
+    return res as Subject;
+  },
+  updateSubject: async (
     id: string,
     payload: Partial<{
       name: string;
@@ -181,33 +224,42 @@ export const api = {
       professor: string | null;
       room: string | null;
     }>
-  ) =>
-    request<Subject>(`/subjects/${id}`, {
+  ): Promise<Subject> => {
+    const res = await request<{ subject: Subject; message?: string } | Subject>(`/subjects/${id}`, {
       method: "PUT",
       body: JSON.stringify(payload),
-    }),
+    });
+    if (res && "subject" in res) return (res as any).subject;
+    return res as Subject;
+  },
   deleteSubject: (id: string) =>
     request<{ message: string }>(`/subjects/${id}`, {
       method: "DELETE",
     }),
 
   // Timetable
-  getSlots: (semesterId?: string) => {
+  getSlots: async (semesterId?: string): Promise<TimetableSlot[]> => {
     const q = semesterId ? `?semesterId=${encodeURIComponent(semesterId)}` : "";
-    return request<TimetableSlot[]>(`/timetable/slots${q}`);
+    const res = await request<{ slots: TimetableSlot[] } | TimetableSlot[]>(`/timetable/slots${q}`);
+    if (Array.isArray(res)) return res;
+    if (res && Array.isArray((res as any).slots)) return (res as any).slots;
+    return [];
   },
-  createSlot: (payload: {
+  createSlot: async (payload: {
     subjectId: string;
     dayOfWeek: string;
     startTime: string;
     endTime: string;
     room?: string | null;
-  }) =>
-    request<TimetableSlot>("/timetable/slots", {
+  }): Promise<TimetableSlot> => {
+    const res = await request<{ slot: TimetableSlot; message?: string } | TimetableSlot>("/timetable/slots", {
       method: "POST",
       body: JSON.stringify(payload),
-    }),
-  updateSlot: (
+    });
+    if (res && "slot" in res) return (res as any).slot;
+    return res as TimetableSlot;
+  },
+  updateSlot: async (
     id: string,
     payload: Partial<{
       dayOfWeek: string;
@@ -215,11 +267,14 @@ export const api = {
       endTime: string;
       room: string | null;
     }>
-  ) =>
-    request<TimetableSlot>(`/timetable/slots/${id}`, {
+  ): Promise<TimetableSlot> => {
+    const res = await request<{ slot: TimetableSlot; message?: string } | TimetableSlot>(`/timetable/slots/${id}`, {
       method: "PUT",
       body: JSON.stringify(payload),
-    }),
+    });
+    if (res && "slot" in res) return (res as any).slot;
+    return res as TimetableSlot;
+  },
   deleteSlot: (id: string) =>
     request<{ message: string }>(`/timetable/slots/${id}`, {
       method: "DELETE",
@@ -322,6 +377,43 @@ export const api = {
     if (!res.ok) throw new ApiError("Failed to export attendance CSV", res.status);
     return res.blob();
   },
+
+  // Historical Attendance Import & Baselines
+  downloadHistoricalCsvTemplate: async () => {
+    const headers: Record<string, string> = {};
+    if (inMemoryToken) headers["Authorization"] = `Bearer ${inMemoryToken}`;
+    const res = await fetch(`${BASE_URL}/attendance/historical-template-csv`, { headers });
+    if (!res.ok) throw new ApiError("Failed to download historical attendance template", res.status);
+    return res.text();
+  },
+  previewHistoricalImport: (payload: {
+    semesterId?: string;
+    rawCsv?: string;
+    items?: Array<{ subjectCode: string; subjectName: string; present: number; total: number }>;
+  }) =>
+    request<HistoricalImportPreviewResponse>("/attendance/historical/preview", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  commitHistoricalImport: (payload: {
+    semesterId?: string;
+    items: Array<{ subjectCode: string; subjectName: string; present: number; total: number }>;
+    overwriteExisting?: boolean;
+  }) =>
+    request<HistoricalImportCommitResponse>("/attendance/historical/import", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  getHistoricalBaselines: (semesterId?: string) => {
+    const q = semesterId ? `?semesterId=${encodeURIComponent(semesterId)}` : "";
+    return request<{ semesterId: string | null; baselines: HistoricalBaselineItem[] }>(
+      `/attendance/historical${q}`
+    );
+  },
+  deleteHistoricalBaseline: (subjectId: string) =>
+    request<{ message: string; subjectId: string }>(`/attendance/historical/${subjectId}`, {
+      method: "DELETE",
+    }),
 
   // Planner
   getPlannerSubjects: (semesterId?: string) => {

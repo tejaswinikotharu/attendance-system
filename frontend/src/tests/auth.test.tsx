@@ -110,4 +110,61 @@ describe("Authentication Pages & Validation", () => {
     expect(getAuthToken()).toBe("mock-jwt-token-12345");
     expect(localStorage.getItem("token")).toBeNull();
   });
+
+  it("displays useful validation message instead of generic 'Validation Error' when registration fails", async () => {
+    const { ApiError } = await import("../api/client");
+    (api.register as any).mockRejectedValue(
+      new ApiError("Full name must be at least 2 characters", 400, [
+        { field: "fullName", message: "Full name must be at least 2 characters" },
+      ])
+    );
+
+    render(
+      <BrowserRouter>
+        <ToastProvider>
+          <AuthProvider>
+            <RegisterPage />
+          </AuthProvider>
+        </ToastProvider>
+      </BrowserRouter>
+    );
+
+    await userEvent.type(screen.getByLabelText(/full name/i), "Alex Johnson");
+    await userEvent.type(screen.getByLabelText(/email address/i), "alex@college.edu");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "Password123");
+    await userEvent.type(screen.getByLabelText(/confirm password/i), "Password123");
+    await userEvent.click(screen.getByRole("button", { name: /create account/i }));
+
+    const alertBanner = await screen.findByRole("alert");
+    expect(alertBanner).toBeInTheDocument();
+    expect(alertBanner).toHaveTextContent("Full name must be at least 2 characters");
+    expect(alertBanner).not.toHaveTextContent(/^Validation Error$/);
+  });
+
+  it("displays server error message when account already exists (409 Conflict)", async () => {
+    const { ApiError } = await import("../api/client");
+    (api.register as any).mockRejectedValue(
+      new ApiError("A student with this email address already exists.", 409)
+    );
+
+    render(
+      <BrowserRouter>
+        <ToastProvider>
+          <AuthProvider>
+            <RegisterPage />
+          </AuthProvider>
+        </ToastProvider>
+      </BrowserRouter>
+    );
+
+    await userEvent.type(screen.getByLabelText(/full name/i), "Alex Johnson");
+    await userEvent.type(screen.getByLabelText(/email address/i), "alex@college.edu");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "Password123");
+    await userEvent.type(screen.getByLabelText(/confirm password/i), "Password123");
+    await userEvent.click(screen.getByRole("button", { name: /create account/i }));
+
+    const alertBanner = await screen.findByRole("alert");
+    expect(alertBanner).toBeInTheDocument();
+    expect(alertBanner).toHaveTextContent("A student with this email address already exists.");
+  });
 });

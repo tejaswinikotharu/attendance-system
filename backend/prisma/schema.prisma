@@ -56,6 +56,7 @@ model Semester {
   subjects       Subject[]
   holidays       Holiday[]
   sessions       ClassSession[]
+  historicalAttendance HistoricalAttendance[]
 
   @@index([userId])
   @@map("semesters")
@@ -76,6 +77,7 @@ model Subject {
   semester       Semester        @relation(fields: [semesterId], references: [id], onDelete: Cascade)
   slots          TimetableSlot[]
   sessions       ClassSession[]
+  historicalAttendance HistoricalAttendance?
 
   @@unique([semesterId, code])
   @@index([semesterId])
@@ -147,4 +149,21 @@ model AttendanceRecord {
   session    ClassSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@map("attendance_records")
+}
+
+model HistoricalAttendance {
+  id          String   @id @default(uuid())
+  semesterId  String
+  subjectId   String   @unique
+  present     Int
+  total       Int
+  batchId     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  semester    Semester @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@index([semesterId])
+  @@map("historical_attendance")
 }
